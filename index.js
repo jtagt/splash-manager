@@ -209,8 +209,7 @@ client.on('message', async message => {
         if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.splasherRole) return message.channel.send(`Please use \`\`${config.prefix || 's!'}splasher @splasher role\`\` to setup your splash command.`);
         if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.publicChannel) return message.channel.send(`Please use \`\`${config.prefix || 's!'}public-channel #public channel\`\` to setup your splash command.`);
         if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.privateChannel) return message.channel.send(`Please use \`\`${config.prefix || 's!'}private-channel #private channel\`\` to setup your splash command.`);
-        if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.splasherRole) return message.channel.send(`Please use \`\`${config.prefix || 's!'}menu-channel #menu channel\`\` to setup your splash command.`);
-        if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.splasherRole) return message.channel.send(`Please use \`\`${config.prefix || 's!'}ping @role to ping for splashes\`\` to setup your splash command.`);
+        if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.rolePing) return message.channel.send(`Please use \`\`${config.prefix || 's!'}ping @role to ping for splashes\`\` to setup your splash command.`);
 
         if (!message.guild.members.cache.get(message.author.id).roles.cache.has(config.splasherRole)) return message.channel.send('Not enough permissions.');
 
