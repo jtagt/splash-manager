@@ -189,7 +189,7 @@ client.on('raw', async data => {
             if (splashData.privateMessageId) {
                 const privateMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.privateChannel).messages.fetch(splashData.privateMessageId);
 
-                privateMessage.edit(`<@&${config.rolePing}>`, { embed: fullEmbed });
+                privateMessage.edit(`<@&${config.donatorPing}>`, { embed: fullEmbed });
             }
 
             if (splashData.publicMessageId) {
@@ -227,7 +227,7 @@ client.on('raw', async data => {
             if (splashData.privateMessageId) {
                 const overPrivateMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.privateChannel).messages.fetch(splashData.privateMessageId);
 
-                overPrivateMessage.edit(`<@&${config.rolePing}>`, { embed: overEmbed });
+                overPrivateMessage.edit(`<@&${config.donatorPing}>`, { embed: overEmbed });
             }
 
             if (splashData.publicMessageId) {
@@ -270,6 +270,7 @@ client.on('message', async message => {
         if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.publicChannel) return message.channel.send(`Please use \`\`${config.prefix || 's!'}public-channel #public channel\`\` to setup your splash command.`);
         if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.privateChannel) return message.channel.send(`Please use \`\`${config.prefix || 's!'}private-channel #private channel\`\` to setup your splash command.`);
         if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.rolePing) return message.channel.send(`Please use \`\`${config.prefix || 's!'}ping @role to ping for splashes\`\` to setup your splash command.`);
+        if (message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR") && !config.donatorPing) return message.channel.send(`Please use \`\`${config.prefix || 's!'}dono-ping @role to ping for splashes\`\` to setup your splash command.`);
 
         if (!message.guild.members.cache.get(message.author.id).roles.cache.has(config.splasherRole)) return message.channel.send('Not enough permissions.');
 
@@ -318,7 +319,7 @@ client.on('message', async message => {
                     .addField('**Splasher**', `<@${message.author.id}>`, true)
                     .setColor('#00FF00')
 
-                const splashPrivateMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.privateChannel).send(`<@&${config.rolePing}>`, { embed: privateEmbed });
+                const splashPrivateMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.privateChannel).send(`<@&${config.donatorPing}>`, { embed: privateEmbed });
                 privateId = splashPrivateMessage.id;
             } else {
                 const privateEmbed = new Discord.MessageEmbed()
@@ -329,7 +330,7 @@ client.on('message', async message => {
                     .addField('**Splasher**', `<@${message.author.id}>`, true)
                     .setColor('#00FF00')
 
-                const splashPrivateMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.privateChannel).send(`<@&${config.rolePing}>`, { embed: privateEmbed });
+                const splashPrivateMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.privateChannel).send(`<@&${config.donatorPing}>`, { embed: privateEmbed });
                 privateId = splashPrivateMessage.id;
             }
 
@@ -478,6 +479,24 @@ client.on('message', async message => {
             newConfig = existingConfig;
 
             newConfig.splasherRole = roleId;
+
+            updateConfig(message.guild.id, newConfig);
+            message.channel.send('Updated configuration.');
+        }
+    } else if (command === "dono-ping") {
+        if (!message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR")) return message.channel.send('Not enough permissions.');
+
+        const rolePing = args[0];
+        if (!rolePing) return message.channel.send('You must provide a role.');
+
+        if (rolePing.startsWith('<@') && rolePing.endsWith('>')) {
+            const roleId = rolePing.slice(3, -1);
+
+            const existingConfig = getConfig(message.guild.id);
+            let newConfig = {};
+            newConfig = existingConfig;
+
+            newConfig.donatorPing = roleId;
 
             updateConfig(message.guild.id, newConfig);
             message.channel.send('Updated configuration.');
