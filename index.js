@@ -4,6 +4,8 @@ const client = new Discord.Client();
 const fs = require('fs');
 const path = require('path');
 
+const schedule = require('node-schedule');
+
 const settings = new Map();
 
 const checkDataDir = async () => {
@@ -134,7 +136,27 @@ client.on('raw', async data => {
     switch (emoji) {
         case "📣": {
             if (splashData.madePublic) break;
-            const message = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.publicChannel).send(`**Party**: /p join ${splashData.host} - ${splashData.location}\n**Splasher**: <@${splashData.hostId}>\n**SPLASHING**\n<@&${config.rolePing}>`);
+
+            let publicEmbed;
+
+            if (splashData.hub === '') {
+                publicEmbed = new Discord.MessageEmbed()
+                    .setTitle('SPLASHING')
+                    .addField('**Party**', `/p join ${splashData.host}`, true)
+                    .addField('**Location**', splashData.location, true)
+                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
+                    .setColor('#00FF00')
+            } else {
+                publicEmbed = new Discord.MessageEmbed()
+                    .setTitle('SPLASHING')
+                    .addField('**Host**', splashData.host, true)
+                    .addField('**Hub**', splashData.hub, true)
+                    .addField('**Location**', splashData.location, true)
+                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
+                    .setColor('#00FF00')
+            }
+
+            const message = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.publicChannel).send(`<@&${config.rolePing}>`, { embed: publicEmbed });
 
             let newSplashData = splashData;
             newSplashData.publicMessageId = message.id;
@@ -145,16 +167,35 @@ client.on('raw', async data => {
         case "🔒": {
             if (splashData.full) break;
 
+            let fullEmbed;
+
+            if (splashData.hub === '') {
+                fullEmbed = new Discord.MessageEmbed()
+                    .setTitle('SPLASHING - FULL')
+                    .addField('**Party**', `/p join ${splashData.host}`, true)
+                    .addField('**Location**', splashData.location, true)
+                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
+                    .setColor('#FFFF00')
+            } else {
+                fullEmbed = new Discord.MessageEmbed()
+                    .setTitle('SPLASHING - FULL')
+                    .addField('**Host**', splashData.host, true)
+                    .addField('**Hub**', splashData.hub, true)
+                    .addField('**Location**', splashData.location, true)
+                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
+                    .setColor('#FFFF00')
+            }
+
             if (splashData.privateMessageId) {
                 const privateMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.privateChannel).messages.fetch(splashData.privateMessageId);
 
-                privateMessage.edit(`**Party**: /p join ${splashData.host} - ${splashData.location}\n**Splasher**: <@${splashData.hostId}>\n**FULL - SPLASHING**\n<@&${config.rolePing}>`);
+                privateMessage.edit(`<@&${config.rolePing}>`, { embed: fullEmbed });
             }
 
             if (splashData.publicMessageId) {
                 const publicMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.publicChannel).messages.fetch(splashData.publicMessageId);
 
-                publicMessage.edit(`**Party**: /p join ${splashData.host} - ${splashData.location}\n**Splasher**: <@${splashData.hostId}>\n**FULL - SPLASHING**\n<@&${config.rolePing}>`);
+                publicMessage.edit(`<@&${config.rolePing}>`, { embed: fullEmbed });
             }
 
             let newFullSplash = splashData;
@@ -164,16 +205,35 @@ client.on('raw', async data => {
             break;
         }
         case "✔️": {
+            let overEmbed;
+
+            if (splashData.hub === '') {
+                overEmbed = new Discord.MessageEmbed()
+                    .setTitle('SPLASHED - OVER')
+                    .addField('**Party**', `/p join ${splashData.host}`, true)
+                    .addField('**Location**', splashData.location, true)
+                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
+                    .setColor('#FF0000')
+            } else {
+                overEmbed = new Discord.MessageEmbed()
+                    .setTitle('SPLASHED - OVER')
+                    .addField('**Host**', splashData.host, true)
+                    .addField('**Hub**', splashData.hub, true)
+                    .addField('**Location**', splashData.location, true)
+                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
+                    .setColor('#FF0000')
+            }
+
             if (splashData.privateMessageId) {
                 const overPrivateMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.privateChannel).messages.fetch(splashData.privateMessageId);
 
-                overPrivateMessage.edit(`**Party**: /p join ${splashData.host} - ${splashData.location}\n**Splasher**: <@${splashData.hostId}>\n**OVER - SPLASHED**\n<@&${config.rolePing}>`);
+                overPrivateMessage.edit(`<@&${config.rolePing}>`, { embed: overEmbed });
             }
 
             if (splashData.publicMessageId) {
                 const overPublicMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.publicChannel).messages.fetch(splashData.publicMessageId);
 
-                overPublicMessage.edit(`**Party**: /p join ${splashData.host} - ${splashData.location}\n**Splasher**: <@${splashData.hostId}>\n**OVER - SPLASHED**\n<@&${config.rolePing}>`);
+                overPublicMessage.edit(`<@&${config.rolePing}>`, { embed: overEmbed });
             }
 
             if (splashData.menuMessageId) {
@@ -218,6 +278,7 @@ client.on('message', async message => {
         let visibility = '';
         let host = '';
         let location = '';
+        let hub = '';
 
         const visibilityResponse = await askQuestion(message, 'Is the splash public or private? \nPlease answer with "Public" or "Private"', ['public', 'private']);
         visibility = visibilityResponse.content;
@@ -225,10 +286,15 @@ client.on('message', async message => {
         const hostResponse = await askQuestion(message, 'Who will be hosting the splash? Just respond with the host IGN.', []);
         host = hostResponse.content;
 
+        if (visibility.toLowerCase() === 'public') {
+            const hubNumber = await askQuestion(message, 'What hub **number** will the public splash be in?', []);
+            hub = hubNumber.content;
+        }
+
         const locationResponse = await askQuestion(message, 'Where is the splash location?', []);
         location = locationResponse.content;
 
-        const reviewResponse = await askQuestion(message, `Review:\nSplash Type: ${visibility}\nLocation: ${location}\nHost: ${host}\n\n If this is correct, respond with "Correct" otherwise "Cancel"`, ['correct', 'cancel']);
+        const reviewResponse = await askQuestion(message, `Review:\nSplash Type: ${visibility}\nLocation: ${location}\nHost: ${host}${hub !== '' ? `\nHub: ${hub}` : ''}\n\n If this is correct, respond with "Correct" otherwise "Cancel"`, ['correct', 'cancel']);
 
         if (reviewResponse.content.toLowerCase() === "correct") {
             const embed = new Discord.MessageEmbed()
@@ -244,30 +310,41 @@ client.on('message', async message => {
             let privateId = null;
             let publicId = null;
 
-            if (visibility !== 'public') {
-                const splashPrivateMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.privateChannel).send(`**Party**: /p join ${host} - ${location}\n**Splasher**: <@${message.author.id}>\n**SPLASHING**\n<@&${config.rolePing}>`);
+            if (visibility.toLowerCase() !== 'public') {
+                const privateEmbed = new Discord.MessageEmbed()
+                    .setTitle('SPLASHING')
+                    .addField('**Party**', `/p join ${host}`, true)
+                    .addField('**Location**', location, true)
+                    .addField('**Splasher**', `<@${message.author.id}>`, true)
+                    .setColor('#00FF00')
+
+                const splashPrivateMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.privateChannel).send(`<@&${config.rolePing}>`, { embed: privateEmbed });
                 privateId = splashPrivateMessage.id;
             } else {
-                const publicSplashMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.publicChannel).send(`**Party**: /p join ${host} - ${location}\n**Splasher**: <@${message.author.id}>\n**SPLASHING**\n<@&${config.rolePing}>`);
-                publicId = publicSplashMessage.id;
+                const privateEmbed = new Discord.MessageEmbed()
+                    .setTitle('SPLASHING')
+                    .addField('**Host**', host, true)
+                    .addField('**Hub**', hub, true)
+                    .addField('**Location**', location, true)
+                    .addField('**Splasher**', `<@${message.author.id}>`, true)
+                    .setColor('#00FF00')
+
+                const splashPrivateMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.privateChannel).send(`<@&${config.rolePing}>`, { embed: privateEmbed });
+                privateId = splashPrivateMessage.id;
             }
 
-            if (publicId) {
-                menuMessage.react('🔒');
-                menuMessage.react('✔️');
-            } else {
-                menuMessage.react('📣');
-                menuMessage.react('🔒');
-                menuMessage.react('✔️');
-            }
+            menuMessage.react('📣');
+            menuMessage.react('🔒');
+            menuMessage.react('✔️');
 
             const splash = {
                 visibility,
                 host,
+                hub,
                 location,
                 hostId: message.author.id,
                 guildId: message.guild.id,
-                madePublic: visibility === 'public' ? true : false,
+                madePublic: false,
                 full: false,
                 splashed: false,
                 publicMessageId: publicId,
@@ -407,7 +484,62 @@ client.on('message', async message => {
         }
     } else if (command === "invite") {
         message.channel.send('<https://discord.com/api/oauth2/authorize?client_id=729397864849211462&permissions=8&scope=bot>');
+    } else if (command === "temprole") {
+        return;
+
+        if (!message.guild.members.cache.get(message.author.id).hasPermission("ADMINISTRATOR")) return message.channel.send('Not enough permissions.');
+
+        const user = args[0];
+        if (!user) return message.channel.send('You must provide a user.');
+
+        const role = args[1];
+        if (!role) return message.channel.send('You must provide a role.');
+
+        const time = args[2];
+        if (!time) return message.channel.send('You must provide a time in minutes.');
+
+        const timeParsed = parseInt(time);
+        if (!timeParsed) return message.channel.send('Invalid time provided.');
+        if (timeParsed <= 0) return message.channel.send('Invalid time provided.');
+
+        const date = new Date(Date.now() + (timeParsed * 60000));
+        const dateAdvance = new Date((Date.now() + (timeParsed * 60000)) - 43200000);
+
+        const userId = user.slice(3, -1);
+        const roleId = user.slice(3, -1);
+
+        if (!user.startsWith('<@') && !user.endsWith('>')) return message.channel.send('Invalid user.');
+        if (!role.startsWith('<@&') && !role.endsWith('>')) return message.channel.send('Invalid role.');
+
+        const existingConfig = getConfig(message.guild.id);
+        let newConfig = {};
+        newConfig = existingConfig;
+
+        newConfig.tempRoles = [...existingConfig.tempRoles || [], [userId, roleId, date]];
+
+        if ((timeParsed * 1000) > 43200000) {
+            schedule.scheduleJob(dateAdvance, async () => {
+                const role = await client.guilds.cache.get(message.guild.id).roles.cache.get(roleId).name;
+
+                await client.guilds.cache.get(message.guild.id).members.cache.get(userId).send(`Your role \`\`${role}\`\` is expiring in 12 hours.`);
+            });
+        }
+
+        schedule.scheduleJob(date, async () => {
+            const existingConfig = getConfig(message.guild.id);
+            let newConfig = {};
+            newConfig = existingConfig;
+
+            newConfig.tempRoles = existingConfig.tempRoles.filter(temp => temp[0] !== userId);
+
+            await client.guilds.cache.get(message.guild.id).members.cache.get(userId).roles.remove(roleId);
+        });
+
+        updateConfig(message.guild.id, newConfig);
+        message.channel.send('Added role.');
+    } else if (command === "invite") {
+        message.channel.send('<https://discord.com/api/oauth2/authorize?client_id=729397864849211462&permissions=8&scope=bot>');
     }
 });
 
-client.login('token');
+client.login('NzI5NzE5NjY1NDcwODY1NTI5.XwNCaQ.yIWK6MtTH-Cb7Au2K2hYIdgDzSQ');
