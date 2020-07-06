@@ -542,4 +542,4 @@ client.on('message', async message => {
     }
 });
 
-client.login('NzI5NzE5NjY1NDcwODY1NTI5.XwNCaQ.yIWK6MtTH-Cb7Au2K2hYIdgDzSQ');
+client.login('token');
