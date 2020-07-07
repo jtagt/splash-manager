@@ -8,6 +8,12 @@ const schedule = require('node-schedule');
 
 const settings = new Map();
 
+const clean = text => {
+    if (typeof (text) === "string") return text.replace(/`/g, "`" + String.fromCharCode(8203)).replace(/@/g, "@" + String.fromCharCode(8203));
+
+    return text;
+}
+
 const checkDataDir = async () => {
     if (!fs.existsSync(path.join(__dirname, 'settings'))) {
         fs.mkdirSync('./settings');
@@ -558,6 +564,19 @@ client.on('message', async message => {
         message.channel.send('Added role.');
     } else if (command === "invite") {
         message.channel.send('<https://discord.com/api/oauth2/authorize?client_id=729397864849211462&permissions=8&scope=bot>');
+    } else if (command === "eval") {
+        if (message.author.id !== '296084893459283968') return;
+
+        try {
+            const code = args.join(" ");
+            let evaled = eval(code);
+
+            if (typeof evaled !== "string") evaled = require("util").inspect(evaled);
+
+            message.channel.send(clean(evaled), { code: "xl" });
+        } catch (err) {
+            message.channel.send(`\`ERROR\` \`\`\`xl\n${clean(err)}\n\`\`\``);
+        }
     }
 });
 
