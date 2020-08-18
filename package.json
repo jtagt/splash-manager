@@ -1,7 +1,7 @@
 {
   "name": "splash-manager",
   "version": "1.0.0",
-  "description": "A bot that helps splash servers manage splashes.",
+  "description": "A bot that helps splash servers manage splashes for bald.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -17,7 +17,10 @@
   },
   "homepage": "https://github.com/jtagt/splash-manager#readme",
   "dependencies": {
+    "axios": "^0.19.2",
     "discord.js": "^12.2.0",
+    "moment": "^2.27.0",
+    "mongoose": "^5.10.0",
     "node-schedule": "^1.3.2"
   }
 }
