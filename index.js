@@ -14,7 +14,8 @@ const playerModel = mongoose.model('players', {
     expires: Number,
     lastSplashRequest: Number,
     lastPotionRequest: Number,
-    verified: Boolean
+    verified: Boolean,
+    hasSentRemind: Boolean
 });
 
 const ignoreModel = mongoose.model('ignores', {
@@ -28,8 +29,19 @@ const ignoreModel = mongoose.model('ignores', {
 mongoose.connect(jsonConfig.mongodb, { useFindAndModify: false, useUnifiedTopology: true, useNewUrlParser: true }, () => console.log('Connected to MongoDB.'));
 
 const MS_DAY = 86400000;
-const STAFF_ROLE = "745103293021421611";
-const VERIFIED_ROLE = "745165541588729906";
+
+const STAFF_ROLE = "714143832991596674";
+const VERIFIED_ROLE = "714425690727907329";
+const MONTHLY_ROLE = "698681973861777408";
+const WEEKLY_ROLE = "698681967499280414";
+const INFINITE_ROLE = "698681976315576491";
+
+const TICKETS_CHANNEL = "698704051411615789";
+const DONATOR_CHANNEL = "698683619736027216";
+const DONATOR_CHANNEL_ROLES = "714499793375723590";
+const EARLY_WARNING_CHANNEL = "714501945771032577";
+
+
 const donatorTypes = ['weekly', 'monthly', 'infinite'];
 const roleManager = new Map();
 
@@ -44,172 +56,10 @@ client.on('ready', async () => {
     client.user.setPresence({ status: 'idle' });
     client.user.setActivity('skyblock || s!', { type: 'PLAYING' });
 
-    const players = await playerModel.find({ donator: true }).lean();
-    players.forEach(player => roleManager.set(player._id, { ...player, hasSentRemind: false }));
-});
+    setInterval(() => checkRoles(), 10000);
 
-const askQuestion = (message, question, answers) => {
-    const promise = new Promise(async (resolve, reject) => {
-        await message.channel.send(question);
-
-        const filter = response => {
-            if (answers.length === 0 && response.author.id === message.author.id) return true;
-
-            if (answers.includes(response.content.toLowerCase()) && response.author.id === message.author.id) {
-                return true;
-            } else {
-                return false;
-            }
-        }
-
-        const splashVisibilityAnswer = await message.channel.awaitMessages(filter, { max: 1, time: 30000, errors: ['time', 'response'] })
-            .catch(() => {
-                message.channel.send('Invalid response. Closing.');
-                reject();
-            });
-
-        resolve(splashVisibilityAnswer.first());
-    });
-
-    return promise;
-}
-
-const currentSplashes = new Map();
-
-client.on('raw', async data => {
-    if (data.t !== 'MESSAGE_REACTION_ADD') return;
-
-    const packetData = data.d;
-    const emoji = packetData.emoji.name;
-
-    if (!currentSplashes.get(packetData.message_id)) return;
-
-    const splashData = currentSplashes.get(packetData.message_id);
-    if (splashData.hostId !== packetData.user_id) return;
-
-    const config = jsonConfig;
-
-    switch (emoji) {
-        case "📣": {
-            if (splashData.madePublic) break;
-
-            let publicEmbed;
-
-            if (splashData.hub === '') {
-                publicEmbed = new Discord.MessageEmbed()
-                    .setTitle('SPLASHING')
-                    .addField('**Party**', `/p join ${splashData.host}`, true)
-                    .addField('**Location**', splashData.location, true)
-                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
-                    .setColor('#00FF00')
-            } else {
-                publicEmbed = new Discord.MessageEmbed()
-                    .setTitle('SPLASHING')
-                    .addField('**Host**', splashData.host, true)
-                    .addField('**Hub**', splashData.hub, true)
-                    .addField('**Location**', splashData.location, true)
-                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
-                    .setColor('#00FF00')
-            }
-
-            const message = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.publicChannel).send(`<@&${config.rolePing}>`, { embed: publicEmbed });
-
-            let newSplashData = splashData;
-            newSplashData.publicMessageId = message.id;
-
-            currentSplashes.set(splashData.menuMessageId, newSplashData);
-            break;
-        }
-        case "🔒": {
-            if (splashData.full) break;
-
-            let fullEmbed;
-
-            if (splashData.hub === '') {
-                fullEmbed = new Discord.MessageEmbed()
-                    .setTitle('SPLASHING - FULL')
-                    .addField('**Party**', `/p join ${splashData.host}`, true)
-                    .addField('**Location**', splashData.location, true)
-                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
-                    .setColor('#FFFF00')
-            } else {
-                fullEmbed = new Discord.MessageEmbed()
-                    .setTitle('SPLASHING - FULL')
-                    .addField('**Host**', splashData.host, true)
-                    .addField('**Hub**', splashData.hub, true)
-                    .addField('**Location**', splashData.location, true)
-                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
-                    .setColor('#FFFF00')
-            }
-
-            if (splashData.privateMessageId) {
-                const privateMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.privateChannel).messages.fetch(splashData.privateMessageId);
-
-                privateMessage.edit(`<@&${config.donatorPing}>`, { embed: fullEmbed });
-            }
-
-            if (splashData.publicMessageId) {
-                const publicMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.publicChannel).messages.fetch(splashData.publicMessageId);
-
-                publicMessage.edit(`<@&${config.rolePing}>`, { embed: fullEmbed });
-            }
-
-            let newFullSplash = splashData;
-            newFullSplash.full = true;
-
-            currentSplashes.set(splashData.menuMessageId, newFullSplash);
-            break;
-        }
-        case "✔️": {
-            let overEmbed;
-
-            if (splashData.hub === '') {
-                overEmbed = new Discord.MessageEmbed()
-                    .setTitle('SPLASHED - OVER')
-                    .addField('**Party**', `/p join ${splashData.host}`, true)
-                    .addField('**Location**', splashData.location, true)
-                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
-                    .setColor('#FF0000')
-            } else {
-                overEmbed = new Discord.MessageEmbed()
-                    .setTitle('SPLASHED - OVER')
-                    .addField('**Host**', splashData.host, true)
-                    .addField('**Hub**', splashData.hub, true)
-                    .addField('**Location**', splashData.location, true)
-                    .addField('**Splasher**', `<@${splashData.hostId}>`, true)
-                    .setColor('#FF0000')
-            }
-
-            if (splashData.privateMessageId) {
-                const overPrivateMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.privateChannel).messages.fetch(splashData.privateMessageId);
-
-                overPrivateMessage.edit(`<@&${config.donatorPing}>`, { embed: overEmbed });
-            }
-
-            if (splashData.publicMessageId) {
-                const overPublicMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.publicChannel).messages.fetch(splashData.publicMessageId);
-
-                overPublicMessage.edit(`<@&${config.rolePing}>`, { embed: overEmbed });
-            }
-
-            if (splashData.menuMessageId) {
-                const overMenuMessage = await client.guilds.cache.get(splashData.guildId).channels.cache.get(config.menuChannel).messages.fetch(splashData.menuMessageId);
-
-                const embed = new Discord.MessageEmbed()
-                    .setColor('#FF0000')
-                    .setTitle('Splash Settings')
-                    .setDescription('Splash Availability: Over')
-                    .addField('Splasher', `<@${splashData.hostId}>`)
-                    .addField('Location', splashData.location, true)
-                    .addField('Host', `/p join ${splashData.host}`, true)
-
-                overMenuMessage.edit(`<@${splashData.hostId}>, here is your splash menu.`, { embed })
-            }
-
-            currentSplashes.delete(splashData.menuMessageId);
-            break;
-        }
-    }
+    const players = await playerModel.find({ donator: true, donatorType: { $in: ['weekly', 'monthly'] } }).lean();
+    players.forEach(player => roleManager.set(player._id, player));
 });
 
 client.on('message', async message => {
@@ -223,93 +73,7 @@ client.on('message', async message => {
     const args = message.content.slice(prefix.length).split(/ +/);
     const command = args.shift().toLowerCase();
 
-    if (command === 'splash') {
-        if (!message.guild.members.cache.get(message.author.id).roles.cache.has(config.splasherRole)) return message.channel.send('Not enough permissions.');
-
-        if (!config.menuChannel) return message.channel.send('Not setup yet. Please set your channels using. ``public-channel`` ``private-channel`` ``menu-channel``');
-
-        let visibility = '';
-        let host = '';
-        let location = '';
-        let hub = '';
-
-        const visibilityResponse = await askQuestion(message, 'Is the splash public or private? \nPlease answer with "Public" or "Private"', ['public', 'private']);
-        visibility = visibilityResponse.content;
-
-        const hostResponse = await askQuestion(message, 'Who will be hosting the splash? Just respond with the host IGN.', []);
-        host = hostResponse.content;
-
-        if (visibility.toLowerCase() === 'public') {
-            const hubNumber = await askQuestion(message, 'What hub **number** will the public splash be in?', []);
-            hub = hubNumber.content;
-        }
-
-        const locationResponse = await askQuestion(message, 'Where is the splash location?', []);
-        location = locationResponse.content;
-
-        const reviewResponse = await askQuestion(message, `Review:\nSplash Type: ${visibility}\nLocation: ${location}\nHost: ${host}${hub !== '' ? `\nHub: ${hub}` : ''}\n\n If this is correct, respond with "Correct" otherwise "Cancel"`, ['correct', 'cancel']);
-
-        if (reviewResponse.content.toLowerCase() === "correct") {
-            const embed = new Discord.MessageEmbed()
-                .setColor('#deb04d')
-                .setTitle('Splash Settings')
-                .setDescription('Splash Availability: Open')
-                .addField('Splasher', `<@${message.author.id}>`)
-                .addField('Location', location, true)
-                .addField('Host', `/p join ${host}`, true)
-
-            const menuMessage = await message.guild.channels.cache.get(config.menuChannel).send(`<@${message.author.id}>, here is your splash menu.`, { embed });
-
-            let privateId = null;
-            let publicId = null;
-
-            if (visibility.toLowerCase() !== 'public') {
-                const privateEmbed = new Discord.MessageEmbed()
-                    .setTitle('SPLASHING')
-                    .addField('**Party**', `/p join ${host}`, true)
-                    .addField('**Location**', location, true)
-                    .addField('**Splasher**', `<@${message.author.id}>`, true)
-                    .setColor('#00FF00')
-
-                const splashPrivateMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.privateChannel).send(`<@&${config.donatorPing}>`, { embed: privateEmbed });
-                privateId = splashPrivateMessage.id;
-            } else {
-                const privateEmbed = new Discord.MessageEmbed()
-                    .setTitle('SPLASHING')
-                    .addField('**Host**', host, true)
-                    .addField('**Hub**', hub, true)
-                    .addField('**Location**', location, true)
-                    .addField('**Splasher**', `<@${message.author.id}>`, true)
-                    .setColor('#00FF00')
-
-                const splashPrivateMessage = await client.guilds.cache.get(message.guild.id).channels.cache.get(config.privateChannel).send(`<@&${config.donatorPing}>`, { embed: privateEmbed });
-                privateId = splashPrivateMessage.id;
-            }
-
-            menuMessage.react('📣');
-            menuMessage.react('🔒');
-            menuMessage.react('✔️');
-
-            const splash = {
-                visibility,
-                host,
-                hub,
-                location,
-                hostId: message.author.id,
-                guildId: message.guild.id,
-                madePublic: false,
-                full: false,
-                splashed: false,
-                publicMessageId: publicId,
-                privateMessageId: privateId,
-                menuMessageId: menuMessage.id
-            }
-
-            currentSplashes.set(menuMessage.id, splash);
-        } else if (reviewResponse.content.toLowerCase() === "cancel") {
-            message.channel.send('Cancelled.');
-        }
-    } else if (command === "verify") {
+    if (command === "verify") {
         const userData = await playerModel.findById(message.author.id);
         if (userData.verified) return message.channel.send('You have already verified.');
 
@@ -355,48 +119,51 @@ client.on('message', async message => {
     } else if (command === "newdonator") {
         if (!message.guild.members.cache.get(message.author.id).roles.cache.has(STAFF_ROLE)) return;
 
-        const ping = args[0];
         const ign = args[1];
         const type = args[2];
 
-        if (!ping) return message.channel.send('You must provide a user.');
+        const mention = message.mentions.users;
+        if (!mention.size) return message.channel.send('You must mention a user.');
+
         if (!ign) return message.channel.send('You must provide a ign.');
         if (!type) return message.channel.send('You must provide a donator type.');
 
-        if (ping.startsWith('<@!') && ping.endsWith('>')) {
-            const userId = ping.slice(3, -1);
+        const userId = mention.first().id;
 
-            const response = await axios(`https://mc-heads.net/minecraft/profile/${ign}`);
-            const data = response.data;
+        const response = await axios(`https://mc-heads.net/minecraft/profile/${ign}`);
+        const data = response.data;
 
-            if (!data) return message.channel.send('Invalid IGN or Mojang API is down.');
-            if (!donatorTypes.includes(type.toLowerCase())) return message.channel.send('Invalid donator type.');
+        if (!data) return message.channel.send('Invalid IGN or Mojang API is down.');
+        if (!donatorTypes.includes(type.toLowerCase())) return message.channel.send('Invalid donator type.');
 
-            let expires = Date.now();
+        let expires = Date.now();
 
+        if (type === 'weekly') {
+            expires = expires + (MS_DAY * 7);
+        } else if (type === 'monthly') {
+            expires = expires + (MS_DAY * 30);
+        } else if (type === 'infinite') {
+            expires = expires + (MS_DAY * 999999);
+        }
+
+        playerModel.findByIdAndUpdate(userId, { _id: userId, mojangUUID: data.id, donator: true, donatorType: type.toLowerCase(), expires, hasSentRemind: false }, { upsert: true, new: true }, (err, res) => {
+            if (err) return message.reply('Something went wrong.');
+
+            roleManager.set(res._id, res.toJSON());
+            
             if (type === 'weekly') {
-                expires = expires + (MS_DAY * 7);
+                client.guilds.cache.get(jsonConfig.guild).members.cache.get(userId).roles.add(WEEKLY_ROLE);
             } else if (type === 'monthly') {
-                expires = expires + (MS_DAY * 30);
+                client.guilds.cache.get(jsonConfig.guild).members.cache.get(userId).roles.add(MONTHLY_ROLE);
             } else if (type === 'infinite') {
-                expires = expires + (MS_DAY * 999999);
+                client.guilds.cache.get(jsonConfig.guild).members.cache.get(userId).roles.add(INFINITE_ROLE);
             }
 
-            playerModel.findByIdAndUpdate(userId, { _id: userId, mojangUUID: data.id, donator: true, donatorType: type.toLowerCase(), expires }, { upsert: true, new: true }, (err, res) => {
-                if (err) return message.reply('Something went wrong.');
+            client.guilds.cache.get(jsonConfig.guild).members.cache.get(userId).send(`Hello,\nThank you for your donation to Bald Splashes!\n\n**This is an automated message to give you some information about the Donator Perks.**\n\nTo start with, you get early access to our Splashes, which you will be notified for in: <#${DONATOR_CHANNEL}>.\nIf you want to be notified before a Splash is about to happen, you can go over to <#${DONATOR_CHANNEL_ROLES}> and click the reaction to be pinged for Early Splash Warnings which will be posted in <#${EARLY_WARNING_CHANNEL}>.\nYou also get access to a special Donator Only chat, which is only visible to other donators.\n\nIf you have any questions, feel free to DM any Bald Splashes Staff Members or open a ticket in <#${TICKETS_CHANNEL}> and one of our Staff Members will be ready to assist you with any questions you might have.`);
 
-                roleManager.set(res._id, { ...res.toJSON(), hasSentRemind: false });
-
-                client.guilds.cache.get(jsonConfig.guild).members.cache.get(userId).roles.add(jsonConfig.donorole);
-
-                client.guilds.cache.get(jsonConfig.guild).members.cache.get(userId).send(`Hello,\nThank you for your donation to Bald Splashes!\n\n**This is an automated message to give you some information about the Donator Perks.**\n\nTo start with, you get early access to our Splashes, which you will be notified for in: #donator-only-splashes.\nIf you want to be notified before a Splash is about to happen, you can go over to #donator-roles and click the reaction to be pinged for Early Splash Warnings which will be posted in #early-splash-warning.\nYou also get access to a special Donator Only chat, which is only visible to other donators.\n\nIf you have any questions, feel free to DM any Bald Splashes Staff Members or open a ticket in #tickets and one of our Staff Members will be ready to assist you with any questions you might have.`);
-
-                message.reply(`Successfully added donator to ${ign}.`);
-            });
-        } else message.reply('Invalid mention.');
+            message.reply(`Successfully added donator to ${ign}.`);
+        });
     } else if (command === "getdiscord") {
-        if (!message.guild.members.cache.get(message.author.id).roles.cache.has(STAFF_ROLE)) return;
-
         const ign = args[0];
         if (!ign) return message.channel.send('You must provide a ign.');
 
@@ -411,16 +178,16 @@ client.on('message', async message => {
 
         message.reply(`The user ${ign}'s discord is ${discord}`);
     } else if (command === "userinfo") {
-        if (!message.guild.members.cache.get(message.author.id).roles.cache.has(STAFF_ROLE)) return;
-
         const target = args[0];
         if (!target) return message.channel.send('You must provide a ign.');
 
         let userData;
         let mojangUsername;
 
-        if (target.startsWith('<@!')) {
-            const userId = target.slice(3, -1);
+        const mention = message.mentions.users;
+
+        if (mention.size) {
+            const userId = mention.first().id;
             userData = await playerModel.findOne({ _id: userId });
         } else {
             const response = await axios(`https://mc-heads.net/minecraft/profile/${target}`);
@@ -436,7 +203,7 @@ client.on('message', async message => {
         if (!userData) return message.channel.send('No user in exists by that name or mention.');
 
         const embed = new Discord.MessageEmbed()
-            .setTitle(`User Info for ${target.startsWith('<@!') ? client.guilds.cache.get(jsonConfig.guild).members.cache.get(userData._id).user.username : mojangUsername}`)
+            .setTitle(`User Info for ${mention.size ? client.guilds.cache.get(jsonConfig.guild).members.cache.get(userData._id).user.username : mojangUsername}`)
             .addField('Donator', userData.donator ? 'True' : 'False')
             .addField('Donator Type', userData.donatorType !== '' ? userData.donatorType : "N/A")
 
@@ -446,28 +213,25 @@ client.on('message', async message => {
     } else if (command === "update") {
         if (!message.guild.members.cache.get(message.author.id).roles.cache.has(STAFF_ROLE)) return;
 
-        const user = args[0];
+        const mention = message.mentions.users;
+
         const time = args[1];
 
-        if (!user) return message.channel.send('You must provide a user.');
+        if (!mention.size) return message.channel.send('You must mention a user.');
         if (!time) return message.channel.send('You must provide a time in days.');
 
-        if (user.startsWith('<@!') && user.endsWith('>')) {
-            const userId = user.slice(3, -1);
+        const userId = mention.first().id;
 
-            const splitted = time.split("d");
-            if (!Number(splitted[0])) return message.channel.send('You must provide a time in days. Ex: ``4d``');
+        const splitted = time.split("d");
+        if (!Number(splitted[0])) return message.channel.send('You must provide a time in days. Ex: ``4d``');
 
-            playerModel.findByIdAndUpdate(userId, { _id: userId, $inc: { expires: (Number(splitted[0] * MS_DAY)) } }, { upsert: true, new: true }, (err, res) => {
-                if (err) return message.reply('Something went wrong.');
+        playerModel.findByIdAndUpdate(userId, { _id: userId, $inc: { expires: (Number(splitted[0] * MS_DAY)) } }, { upsert: true, new: true }, (err, res) => {
+            if (err) return message.reply('Something went wrong.');
 
-                roleManager.set(res._id, { ...res.toJSON(), hasSentRemind: false });
-                message.reply(`Successfully updated their subscription.`);
-            });
-        } else message.reply('Invalid mention.');
+            roleManager.set(res._id, { ...res.toJSON(), hasSentRemind: false });
+            message.reply(`Successfully updated their subscription.`);
+        });
     } else if (command === "mutual") {
-        if (!message.guild.members.cache.get(message.author.id).roles.cache.has(STAFF_ROLE)) return;
-
         const target = args[0];
         if (!target) return message.channel.send('You must provide a ign.');
 
@@ -505,6 +269,8 @@ client.on('message', async message => {
 
         message.channel.send(embed);
     } else if (command === "ignore") {
+        if (!message.guild.members.cache.get(message.author.id).roles.cache.has(STAFF_ROLE)) return;
+
         const types = ['add', 'remove', 'view'];
         if (!args[0]) return message.channel.send('You must use ignore add or ignore remove or ignore view.');
         if (!types.includes(args[0])) return message.channel.send('You must use ignore add or ignore remove or ignore view.');
@@ -548,11 +314,13 @@ client.on('message', async message => {
         const target = args[0];
         if (!target) return message.channel.send('You must provide a username.');
 
+        const mention = message.mentions.users;
+
         let userData;
         let mojangUsername;
 
-        if (target.startsWith('<@!')) {
-            const userId = target.slice(3, -1);
+        if (mention.size) {
+            const userId = mention.first().id;
             userData = await playerModel.findOne({ _id: userId });
 
             mojangUsername = message.author.username;
@@ -576,14 +344,18 @@ client.on('message', async message => {
 
         message.channel.send(embed);
     } else if (command === "splashrequestlog") {
+        if (!message.guild.members.cache.get(message.author.id).roles.cache.has(STAFF_ROLE)) return;
+
         const target = args[0];
         if (!target) return message.channel.send('You must provide a username.');
+
+        const mention = message.mentions.users;
 
         let userData;
         let mojangUsername;
 
-        if (target.startsWith('<@!')) {
-            const userId = target.slice(3, -1);
+        if (mention.size) {
+            const userId = mention.first().id;
             userData = await playerModel.findByIdAndUpdate(userId, { $set: { lastSplashRequest: Date.now() } }, (err, res) => {
                 if (err) return message.channel.send('Something went wrong.');
 
@@ -610,8 +382,10 @@ client.on('message', async message => {
         let userData;
         let mojangUsername;
 
-        if (target.startsWith('<@!')) {
-            const userId = target.slice(3, -1);
+        const mention = message.mentions.users;
+
+        if (mention.size) {
+            const userId = mention.first().id;
             userData = await playerModel.findOne({ _id: userId });
 
             mojangUsername = message.author.username;
@@ -635,14 +409,18 @@ client.on('message', async message => {
 
         message.channel.send(embed);
     } else if (command === "potionrequestlog") {
+        if (!message.guild.members.cache.get(message.author.id).roles.cache.has(STAFF_ROLE)) return;
+        
         const target = args[0];
         if (!target) return message.channel.send('You must provide a username.');
 
         let userData;
         let mojangUsername;
 
-        if (target.startsWith('<@!')) {
-            const userId = target.slice(3, -1);
+        const mention = message.mentions.users;
+
+        if (mention.size) {
+            const userId = mention.first().id;
             userData = await playerModel.findByIdAndUpdate(userId, { $set: { lastPotionRequest: Date.now() } }, (err, res) => {
                 if (err) return message.channel.send('Something went wrong.');
 
@@ -689,27 +467,30 @@ const checkRoles = () => {
 
         const withinDay = (expires - MS_DAY) < Date.now();
 
+        if (!client.guilds.cache.get(jsonConfig.guild).members.cache.get(role[0])) return;
+
         if (!hasSentRemind && withinDay) {
-            const newData = {
-                expires,
-                hasSentRemind: true
-            }
-
-            roleManager.set(role[0], newData);
-            client.guilds.cache.get(jsonConfig.guild).members.cache.get(role[0]).send(`Hello, <@!${role[0]}>,\nThis is an automated message to let you know your Donator Rank is ending in 24 hours! \n\nTo renew or upgrade your Donator Rank go create a ticket in #tickets! \nIf you do not wish to renew or upgrade your Donator Rank, you can ignore this message! \nIf you have any questions, you could also make a ticket or send a Direct Message to any online staff in **Bald Splashes**. `);
-        }
-
-        if (expires < Date.now()) {
+            playerModel.findByIdAndUpdate(role[0], { $set: { hasSentRemind: true } }, { new: true }, (err, res) => {
+                roleManager.set(role[0], res.toJSON());
+                console.log('sent this person reminder', role[0]);
+                //client.guilds.cache.get(jsonConfig.guild).members.cache.get(role[0]).send(`Hello,\nThis is an automated message to let you know your Donator Rank is ending in 24 hours! \n\nTo renew or upgrade your Donator Rank go create a ticket in <#${TICKETS_CHANNEL}>! \nIf you do not wish to renew or upgrade your Donator Rank, you can ignore this message! \nIf you have any questions, you could also make a ticket or send a Direct Message to any online staff in **Bald Splashes**. `);
+            });
+        } else if (expires < Date.now()) {
             roleManager.delete(role[0]);
 
             playerModel.findByIdAndUpdate(role[0], { $set: { donator: false, donatorType: '' } }, (err, res) => {
-                client.guilds.cache.get(jsonConfig.guild).members.cache.get(role[0]).roles.remove(jsonConfig.donorole);
-                client.guilds.cache.get(jsonConfig.guild).members.cache.get(role[0]).send(`Hello, <@!${role[0]}>,\nThis is an automated message to let you know your Donator Rank expired, this means you no longer have access to Donator Splashes. \n\nIf you want to get your Donator Rank back open a ticket in #tickets! \nIf you have any questions, you could also make a ticket, or send a Direct Message to any online staff in **Bald Splashes.**`);
+                /*if (data.type === 'weekly') {
+                    client.guilds.cache.get(jsonConfig.guild).members.cache.get(userId).roles.remove(WEEKLY_ROLE);
+                } else if (data.type === 'monthly') {
+                    client.guilds.cache.get(jsonConfig.guild).members.cache.get(userId).roles.remove(MONTHLY_ROLE);
+                }*/
+
+                console.log('remove this person role', role[0]);
+
+                //client.guilds.cache.get(jsonConfig.guild).members.cache.get(role[0]).send(`Hello,\nThis is an automated message to let you know your Donator Rank expired, this means you no longer have access to Donator Splashes. \n\nIf you want to get your Donator Rank back open a ticket in <#${TICKETS_CHANNEL}>! \nIf you have any questions, you could also make a ticket, or send a Direct Message to any online staff in **Bald Splashes.**`);
             });
         }
     });
 }
-
-setInterval(() => checkRoles(), 1000);
 
 client.login(jsonConfig.token);
